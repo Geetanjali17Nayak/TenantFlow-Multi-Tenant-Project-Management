@@ -13,6 +13,8 @@ import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { AddMemberDto } from './dto/add-member.dto';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
 import { Role } from '@prisma/client';
+import { AuditService } from '../audit/audit.service';
+import { AuditAction, AuditEntity } from '../audit/audit.constants';
 
 @Injectable()
 export class OrganizationsService {
@@ -20,6 +22,7 @@ export class OrganizationsService {
     private readonly prisma: PrismaService,
     private readonly usersService: UsersService,
     private readonly authService: AuthService,
+    private readonly auditService: AuditService,
   ) {}
 
   private slugify(text: string): string {
@@ -86,6 +89,7 @@ export class OrganizationsService {
       name: m.organization.name,
       slug: m.organization.slug,
       role: m.role,
+      membershipId: m.id,
       joinedAt: m.createdAt,
       createdAt: m.organization.createdAt,
       updatedAt: m.organization.updatedAt,
@@ -194,21 +198,41 @@ export class OrganizationsService {
       throw new ConflictException(`User "${dto.email}" is already a member of this organization`);
     }
 
-    const newMembership = await this.prisma.membership.create({
-      data: {
-        userId: userToAdd.id,
-        organizationId: orgId,
-        role: dto.role || Role.MEMBER,
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
+    const newMembership = await this.prisma.$transaction(async (tx) => {
+      const membership = await tx.membership.create({
+        data: {
+          userId: userToAdd.id,
+          organizationId: orgId,
+          role: dto.role || Role.MEMBER,
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+            },
           },
         },
-      },
+      });
+
+      // orgId is a verified tenant here: verifyMembershipRole passed above
+      await this.auditService.logAction(
+        orgId,
+        userId,
+        AuditAction.MEMBER_ADDED,
+        AuditEntity.MEMBER,
+        membership.userId,
+        {
+          memberName: membership.user.name,
+          memberEmail: membership.user.email,
+          membershipId: membership.id,
+          role: membership.role,
+        },
+        tx,
+      );
+
+      return membership;
     });
 
     return {
@@ -224,6 +248,15 @@ export class OrganizationsService {
 
     const targetMembership = await this.prisma.membership.findFirst({
       where: { id: memberId, organizationId: orgId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+          },
+        },
+      },
     });
 
     if (!targetMembership) {
@@ -239,18 +272,47 @@ export class OrganizationsService {
       throw new ForbiddenException('Only organization OWNERs can promote a member to OWNER');
     }
 
-    const updated = await this.prisma.membership.update({
-      where: { id: memberId },
-      data: { role: dto.role },
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            name: true,
+    // Same role: nothing changes, so nothing is written or logged
+    if (dto.role === targetMembership.role) {
+      return {
+        membershipId: targetMembership.id,
+        user: targetMembership.user,
+        role: targetMembership.role,
+        updatedAt: targetMembership.updatedAt,
+      };
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const membership = await tx.membership.update({
+        where: { id: memberId },
+        data: { role: dto.role },
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+            },
           },
         },
-      },
+      });
+
+      await this.auditService.logAction(
+        orgId,
+        userId,
+        AuditAction.ROLE_CHANGED,
+        AuditEntity.MEMBER,
+        targetMembership.userId,
+        {
+          memberName: targetMembership.user.name,
+          memberEmail: targetMembership.user.email,
+          membershipId: targetMembership.id,
+          changes: { role: { from: targetMembership.role, to: membership.role } },
+        },
+        tx,
+      );
+
+      return membership;
     });
 
     return {
@@ -266,6 +328,15 @@ export class OrganizationsService {
 
     const targetMembership = await this.prisma.membership.findFirst({
       where: { id: memberId, organizationId: orgId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+          },
+        },
+      },
     });
 
     if (!targetMembership) {
@@ -293,8 +364,26 @@ export class OrganizationsService {
       }
     }
 
-    await this.prisma.membership.delete({
-      where: { id: memberId },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.membership.delete({
+        where: { id: memberId },
+      });
+
+      await this.auditService.logAction(
+        orgId,
+        userId,
+        AuditAction.MEMBER_REMOVED,
+        AuditEntity.MEMBER,
+        targetMembership.userId,
+        {
+          memberName: targetMembership.user.name,
+          memberEmail: targetMembership.user.email,
+          membershipId: targetMembership.id,
+          role: targetMembership.role,
+          selfRemoval: isSelfRemoval,
+        },
+        tx,
+      );
     });
 
     return { message: 'Member removed successfully' };

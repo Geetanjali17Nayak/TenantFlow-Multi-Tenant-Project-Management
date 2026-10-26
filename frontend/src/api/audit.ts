@@ -1,5 +1,5 @@
 import { apiClient } from './apiClient';
-import type { AuditLog, PaginatedResult } from '../types';
+import type { AuditLog, Paginated } from '../types';
 
 export interface AuditQueryParams {
   page?: number;
@@ -9,8 +9,8 @@ export interface AuditQueryParams {
 }
 
 export const auditApi = {
-  getAuditLogs: async (params?: AuditQueryParams): Promise<PaginatedResult<AuditLog>> => {
-    const res = await apiClient.get<PaginatedResult<AuditLog>>('/audit-logs', { params });
+  getAuditLogs: async (params?: AuditQueryParams): Promise<Paginated<AuditLog>> => {
+    const res = await apiClient.get<Paginated<AuditLog>>('/audit-logs', { params });
     return res.data;
   },
 };

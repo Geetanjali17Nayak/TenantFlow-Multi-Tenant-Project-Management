@@ -24,4 +24,7 @@ export enum Permission {
 
   // Audit Log permissions
   AUDIT_READ = 'audit:read',
+
+  // Activity feed permissions
+  ACTIVITY_READ = 'activity:read',
 }

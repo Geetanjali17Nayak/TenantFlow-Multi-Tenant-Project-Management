@@ -10,6 +10,8 @@ import { ProjectDetailPage } from './pages/ProjectDetailPage';
 import { TasksPage } from './pages/TasksPage';
 import { OrganizationPage } from './pages/OrganizationPage';
 import { AuditLogsPage } from './pages/AuditLogsPage';
+import { ActivityPage } from './pages/ActivityPage';
+import { ProfilePage } from './pages/ProfilePage';
 import { NotFoundPage } from './pages/NotFoundPage';
 import { Loader2 } from 'lucide-react';
 
@@ -102,7 +104,9 @@ export const App: React.FC = () => {
             <Route path="/projects/:id" element={<ProjectDetailPage />} />
             <Route path="/tasks" element={<TasksPage />} />
             <Route path="/organization" element={<OrganizationPage />} />
+            <Route path="/activity" element={<ActivityPage />} />
             <Route path="/audit-logs" element={<AuditLogsPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
           </Route>
 
           <Route path="*" element={<NotFoundPage />} />

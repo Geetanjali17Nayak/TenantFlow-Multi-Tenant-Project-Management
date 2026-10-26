@@ -3,18 +3,38 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateProjectDto } from './dto/create-project.dto';
 import { UpdateProjectDto } from './dto/update-project.dto';
 import { QueryProjectDto } from './dto/query-project.dto';
+import { AuditService } from '../audit/audit.service';
+import { AuditAction, AuditEntity } from '../audit/audit.constants';
+import { diffProject } from '../audit/audit-diff';
 
 @Injectable()
 export class ProjectsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditService: AuditService,
+  ) {}
 
-  async createProject(tenantId: string, dto: CreateProjectDto) {
-    return this.prisma.project.create({
-      data: {
+  async createProject(tenantId: string, userId: string, dto: CreateProjectDto) {
+    return this.prisma.$transaction(async (tx) => {
+      const project = await tx.project.create({
+        data: {
+          tenantId,
+          name: dto.name,
+          description: dto.description,
+        },
+      });
+
+      await this.auditService.logAction(
         tenantId,
-        name: dto.name,
-        description: dto.description,
-      },
+        userId,
+        AuditAction.PROJECT_CREATED,
+        AuditEntity.PROJECT,
+        project.id,
+        { name: project.name },
+        tx,
+      );
+
+      return project;
     });
   }
 
@@ -78,25 +98,56 @@ export class ProjectsService {
     return project;
   }
 
-  async updateProject(tenantId: string, projectId: string, dto: UpdateProjectDto) {
-    // Verify existence within tenant
-    await this.getProjectById(tenantId, projectId);
+  async updateProject(tenantId: string, userId: string, projectId: string, dto: UpdateProjectDto) {
+    // Verify existence within tenant (also the "before" snapshot for the audit diff)
+    const before = await this.getProjectById(tenantId, projectId);
 
-    return this.prisma.project.update({
-      where: { id: projectId },
-      data: {
-        ...(dto.name && { name: dto.name }),
-        ...(dto.description !== undefined && { description: dto.description }),
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.project.update({
+        where: { id: projectId },
+        data: {
+          ...(dto.name && { name: dto.name }),
+          ...(dto.description !== undefined && { description: dto.description }),
+        },
+      });
+
+      // No-op updates leave no audit trail
+      const changes = diffProject(before, updated);
+      if (Object.keys(changes).length > 0) {
+        await this.auditService.logAction(
+          tenantId,
+          userId,
+          AuditAction.PROJECT_UPDATED,
+          AuditEntity.PROJECT,
+          projectId,
+          { name: updated.name, changes },
+          tx,
+        );
+      }
+
+      return updated;
     });
   }
 
-  async deleteProject(tenantId: string, projectId: string) {
+  async deleteProject(tenantId: string, userId: string, projectId: string) {
     // Verify existence within tenant
-    await this.getProjectById(tenantId, projectId);
+    const project = await this.getProjectById(tenantId, projectId);
 
-    await this.prisma.project.delete({
-      where: { id: projectId },
+    // Tasks cascade at the DB level; one PROJECT_DELETED row records how many went with it
+    await this.prisma.$transaction(async (tx) => {
+      await tx.project.delete({
+        where: { id: projectId },
+      });
+
+      await this.auditService.logAction(
+        tenantId,
+        userId,
+        AuditAction.PROJECT_DELETED,
+        AuditEntity.PROJECT,
+        projectId,
+        { name: project.name, taskCount: project._count.tasks },
+        tx,
+      );
     });
 
     return { message: 'Project successfully deleted' };

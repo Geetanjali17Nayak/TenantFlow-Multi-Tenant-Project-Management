@@ -4,7 +4,9 @@ import { useAuth } from '../context/AuthContext';
 import { projectsApi } from '../api/projects';
 import { tasksApi } from '../api/tasks';
 import { organizationsApi } from '../api/organizations';
-import type { Project, Task } from '../types';
+import { activityApi } from '../api/activity';
+import type { ActivityItem, Project, Task } from '../types';
+import { ActivityFeed } from '../components/activity/ActivityFeed';
 import { StatusBadge, PriorityBadge } from '../components/common/Badge';
 import { CreateOrganizationModal } from '../components/common/CreateOrganizationModal';
 import {
@@ -26,6 +28,8 @@ export const DashboardPage: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [memberCount, setMemberCount] = useState<number>(0);
+  const [activity, setActivity] = useState<ActivityItem[]>([]);
+  const [activityError, setActivityError] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
   const [isCreateOrgOpen, setIsCreateOrgOpen] = useState<boolean>(false);
 
@@ -37,15 +41,18 @@ export const DashboardPage: React.FC = () => {
 
     setLoading(true);
     try {
-      const [projRes, taskRes, memberRes] = await Promise.allSettled([
+      const [projRes, taskRes, memberRes, activityRes] = await Promise.allSettled([
         projectsApi.getProjects({ limit: 5 }),
         tasksApi.getTasks({ limit: 10 }),
         organizationsApi.getMembers(activeTenant.id),
+        activityApi.getActivity({ limit: 5 }),
       ]);
 
       if (projRes.status === 'fulfilled') setProjects(projRes.value.data);
       if (taskRes.status === 'fulfilled') setTasks(taskRes.value.data);
       if (memberRes.status === 'fulfilled') setMemberCount(memberRes.value.length);
+      if (activityRes.status === 'fulfilled') setActivity(activityRes.value.data);
+      setActivityError(activityRes.status === 'rejected');
     } catch (err) {
       console.error('Error fetching dashboard metrics:', err);
     } finally {
@@ -243,6 +250,26 @@ export const DashboardPage: React.FC = () => {
 
         {/* Status Breakdown sidebar card */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+          {/* Recent Activity card */}
+          <div className="glass-card" style={{ padding: '24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#fff' }}>Recent Activity</h3>
+              <Link to="/activity" style={{ fontSize: '0.825rem', color: 'var(--accent-primary)', textDecoration: 'none', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '4px' }}>
+                View All <ArrowRight size={14} />
+              </Link>
+            </div>
+
+            {loading ? (
+              <div style={{ textAlign: 'center', padding: '16px' }}><Loader2 size={22} className="spinner" /></div>
+            ) : activityError ? (
+              <div style={{ fontSize: '0.825rem', color: 'var(--text-muted)' }}>Couldn't load activity.</div>
+            ) : activity.length === 0 ? (
+              <div style={{ fontSize: '0.825rem', color: 'var(--text-muted)' }}>No activity yet.</div>
+            ) : (
+              <ActivityFeed items={activity} compact />
+            )}
+          </div>
+
           <div className="glass-card" style={{ padding: '24px' }}>
             <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#fff', marginBottom: '16px' }}>
               Task Status Breakdown

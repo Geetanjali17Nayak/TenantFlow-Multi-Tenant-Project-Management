@@ -3,19 +3,21 @@ import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { CreateOrganizationModal } from '../common/CreateOrganizationModal';
 import { RoleBadge } from '../common/Badge';
+import { Avatar } from '../common/Avatar';
+import type { Role } from '../../types';
 import {
   LayoutDashboard,
   FolderKanban,
   CheckSquare,
   Users,
   ShieldAlert,
+  Activity,
   Plus,
   LogOut,
   ChevronDown,
   Building2,
   Menu,
   X,
-  User as UserIcon,
 } from 'lucide-react';
 
 export const AppLayout: React.FC = () => {
@@ -49,13 +51,18 @@ export const AppLayout: React.FC = () => {
     navigate('/login');
   };
 
-  const navItems = [
+  // roles hides items a role can't open; the backend still enforces access
+  const navItems: { to: string; label: string; icon: typeof LayoutDashboard; roles?: Role[] }[] = [
     { to: '/', label: 'Dashboard', icon: LayoutDashboard },
     { to: '/projects', label: 'Projects', icon: FolderKanban },
     { to: '/tasks', label: 'Tasks Kanban', icon: CheckSquare },
     { to: '/organization', label: 'Members & Roles', icon: Users },
-    { to: '/audit-logs', label: 'Audit Trail', icon: ShieldAlert },
+    { to: '/activity', label: 'Activity', icon: Activity },
+    { to: '/audit-logs', label: 'Audit Trail', icon: ShieldAlert, roles: ['OWNER', 'ADMIN'] },
   ];
+  const visibleNavItems = navItems.filter(
+    (item) => !item.roles || (activeTenant && item.roles.includes(activeTenant.role)),
+  );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--bg-primary)' }}>
@@ -229,22 +236,9 @@ export const AppLayout: React.FC = () => {
 
           {/* User Profile */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', borderLeft: '1px solid var(--border-color)', paddingLeft: '16px' }}>
-            <div
-              style={{
-                width: '34px',
-                height: '34px',
-                borderRadius: '50%',
-                background: 'var(--bg-tertiary)',
-                border: '1px solid var(--border-color)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'var(--accent-primary)',
-                fontWeight: 700,
-              }}
-            >
-              {user?.name ? user.name.charAt(0).toUpperCase() : <UserIcon size={16} />}
-            </div>
+            <Link to="/profile" className="profile-avatar-link" aria-label="Your profile" title="Your profile">
+              <Avatar name={user?.name} avatarUrl={user?.avatarUrl} />
+            </Link>
             <div style={{ display: 'none', flexDirection: 'column' }}>
               <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>{user?.name}</span>
               <span style={{ fontSize: '0.725rem', color: 'var(--text-muted)' }}>{user?.email}</span>
@@ -276,7 +270,7 @@ export const AppLayout: React.FC = () => {
               MAIN NAVIGATION
             </div>
 
-            {navItems.map((item) => {
+            {visibleNavItems.map((item) => {
               const Icon = item.icon;
               return (
                 <NavLink

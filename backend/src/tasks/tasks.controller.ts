@@ -22,6 +22,7 @@ import { PermissionsGuard } from '../permissions/guards/permissions.guard';
 import { CurrentTenant, TenantContext } from '../tenant/decorators/current-tenant.decorator';
 import { RequirePermissions } from '../permissions/decorators/require-permissions.decorator';
 import { Permission } from '../permissions/permissions.enum';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 @ApiTags('Tasks')
 @ApiBearerAuth()
@@ -44,10 +45,11 @@ export class TasksController {
   @ApiResponse({ status: 404, description: 'Project not found in organization' })
   async createTask(
     @CurrentTenant() tenant: TenantContext,
+    @CurrentUser('userId') userId: string,
     @Param('projectId') projectId: string,
     @Body() dto: CreateTaskDto,
   ) {
-    return this.tasksService.createTask(tenant.tenantId, projectId, dto);
+    return this.tasksService.createTask(tenant.tenantId, userId, projectId, dto);
   }
 
   @Get('projects/:projectId/tasks')
@@ -95,10 +97,11 @@ export class TasksController {
   @ApiResponse({ status: 404, description: 'Task not found' })
   async updateTask(
     @CurrentTenant() tenant: TenantContext,
+    @CurrentUser('userId') userId: string,
     @Param('id') taskId: string,
     @Body() dto: UpdateTaskDto,
   ) {
-    return this.tasksService.updateTask(tenant.tenantId, taskId, dto);
+    return this.tasksService.updateTask(tenant.tenantId, userId, taskId, dto);
   }
 
   @Delete('tasks/:id')
@@ -110,8 +113,9 @@ export class TasksController {
   @ApiResponse({ status: 404, description: 'Task not found' })
   async deleteTask(
     @CurrentTenant() tenant: TenantContext,
+    @CurrentUser('userId') userId: string,
     @Param('id') taskId: string,
   ) {
-    return this.tasksService.deleteTask(tenant.tenantId, taskId);
+    return this.tasksService.deleteTask(tenant.tenantId, userId, taskId);
   }
 }

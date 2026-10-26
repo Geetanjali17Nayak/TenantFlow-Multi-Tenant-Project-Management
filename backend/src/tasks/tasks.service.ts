@@ -3,12 +3,18 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateTaskDto } from './dto/create-task.dto';
 import { UpdateTaskDto } from './dto/update-task.dto';
 import { QueryTaskDto } from './dto/query-task.dto';
+import { AuditService } from '../audit/audit.service';
+import { AuditAction, AuditEntity } from '../audit/audit.constants';
+import { diffTask } from '../audit/audit-diff';
 
 @Injectable()
 export class TasksService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly auditService: AuditService,
+  ) {}
 
-  async createTask(tenantId: string, projectId: string, dto: CreateTaskDto) {
+  async createTask(tenantId: string, userId: string, projectId: string, dto: CreateTaskDto) {
     // 1. Validate that target project exists in active tenant
     const project = await this.prisma.project.findFirst({
       where: { id: projectId, tenantId },
@@ -34,20 +40,42 @@ export class TasksService {
       }
     }
 
-    return this.prisma.task.create({
-      data: {
+    return this.prisma.$transaction(async (tx) => {
+      const task = await tx.task.create({
+        data: {
+          tenantId,
+          projectId,
+          title: dto.title,
+          description: dto.description,
+          status: dto.status,
+          priority: dto.priority,
+          assigneeId: dto.assigneeId,
+        },
+        include: {
+          project: { select: { id: true, name: true } },
+          assignee: { select: { id: true, name: true, email: true } },
+        },
+      });
+
+      await this.auditService.logAction(
         tenantId,
-        projectId,
-        title: dto.title,
-        description: dto.description,
-        status: dto.status,
-        priority: dto.priority,
-        assigneeId: dto.assigneeId,
-      },
-      include: {
-        project: { select: { id: true, name: true } },
-        assignee: { select: { id: true, name: true, email: true } },
-      },
+        userId,
+        AuditAction.TASK_CREATED,
+        AuditEntity.TASK,
+        task.id,
+        {
+          title: task.title,
+          projectId: task.projectId,
+          projectName: task.project.name,
+          status: task.status,
+          priority: task.priority,
+          assigneeId: task.assigneeId,
+          assigneeName: task.assignee?.name ?? null,
+        },
+        tx,
+      );
+
+      return task;
     });
   }
 
@@ -125,9 +153,9 @@ export class TasksService {
     return task;
   }
 
-  async updateTask(tenantId: string, taskId: string, dto: UpdateTaskDto) {
-    // 1. Verify existence in tenant
-    await this.getTaskById(tenantId, taskId);
+  async updateTask(tenantId: string, userId: string, taskId: string, dto: UpdateTaskDto) {
+    // 1. Verify existence in tenant (also the "before" snapshot for the audit diff)
+    const before = await this.getTaskById(tenantId, taskId);
 
     // 2. Validate assignee if being changed
     if (dto.assigneeId) {
@@ -145,28 +173,63 @@ export class TasksService {
       }
     }
 
-    return this.prisma.task.update({
-      where: { id: taskId },
-      data: {
-        ...(dto.title && { title: dto.title }),
-        ...(dto.description !== undefined && { description: dto.description }),
-        ...(dto.status && { status: dto.status }),
-        ...(dto.priority && { priority: dto.priority }),
-        ...(dto.assigneeId !== undefined && { assigneeId: dto.assigneeId }),
-      },
-      include: {
-        project: { select: { id: true, name: true } },
-        assignee: { select: { id: true, name: true, email: true } },
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const updated = await tx.task.update({
+        where: { id: taskId },
+        data: {
+          ...(dto.title && { title: dto.title }),
+          ...(dto.description !== undefined && { description: dto.description }),
+          ...(dto.status && { status: dto.status }),
+          ...(dto.priority && { priority: dto.priority }),
+          ...(dto.assigneeId !== undefined && { assigneeId: dto.assigneeId }),
+        },
+        include: {
+          project: { select: { id: true, name: true } },
+          assignee: { select: { id: true, name: true, email: true } },
+        },
+      });
+
+      // No-op updates leave no audit trail
+      const changes = diffTask(before, updated);
+      if (Object.keys(changes).length > 0) {
+        await this.auditService.logAction(
+          tenantId,
+          userId,
+          AuditAction.TASK_UPDATED,
+          AuditEntity.TASK,
+          taskId,
+          {
+            title: updated.title,
+            projectId: updated.projectId,
+            projectName: updated.project.name,
+            changes,
+          },
+          tx,
+        );
+      }
+
+      return updated;
     });
   }
 
-  async deleteTask(tenantId: string, taskId: string) {
+  async deleteTask(tenantId: string, userId: string, taskId: string) {
     // Verify existence in tenant
-    await this.getTaskById(tenantId, taskId);
+    const task = await this.getTaskById(tenantId, taskId);
 
-    await this.prisma.task.delete({
-      where: { id: taskId },
+    await this.prisma.$transaction(async (tx) => {
+      await tx.task.delete({
+        where: { id: taskId },
+      });
+
+      await this.auditService.logAction(
+        tenantId,
+        userId,
+        AuditAction.TASK_DELETED,
+        AuditEntity.TASK,
+        taskId,
+        { title: task.title, projectId: task.projectId, projectName: task.project?.name },
+        tx,
+      );
     });
 
     return { message: 'Task successfully deleted' };

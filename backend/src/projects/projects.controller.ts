@@ -22,6 +22,7 @@ import { PermissionsGuard } from '../permissions/guards/permissions.guard';
 import { CurrentTenant, TenantContext } from '../tenant/decorators/current-tenant.decorator';
 import { RequirePermissions } from '../permissions/decorators/require-permissions.decorator';
 import { Permission } from '../permissions/permissions.enum';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 
 @ApiTags('Projects')
 @ApiBearerAuth()
@@ -42,9 +43,10 @@ export class ProjectsController {
   @ApiResponse({ status: 403, description: 'Insufficient permissions' })
   async createProject(
     @CurrentTenant() tenant: TenantContext,
+    @CurrentUser('userId') userId: string,
     @Body() dto: CreateProjectDto,
   ) {
-    return this.projectsService.createProject(tenant.tenantId, dto);
+    return this.projectsService.createProject(tenant.tenantId, userId, dto);
   }
 
   @Get()
@@ -79,10 +81,11 @@ export class ProjectsController {
   @ApiResponse({ status: 404, description: 'Project not found' })
   async updateProject(
     @CurrentTenant() tenant: TenantContext,
+    @CurrentUser('userId') userId: string,
     @Param('id') projectId: string,
     @Body() dto: UpdateProjectDto,
   ) {
-    return this.projectsService.updateProject(tenant.tenantId, projectId, dto);
+    return this.projectsService.updateProject(tenant.tenantId, userId, projectId, dto);
   }
 
   @Delete(':id')
@@ -94,8 +97,9 @@ export class ProjectsController {
   @ApiResponse({ status: 404, description: 'Project not found' })
   async deleteProject(
     @CurrentTenant() tenant: TenantContext,
+    @CurrentUser('userId') userId: string,
     @Param('id') projectId: string,
   ) {
-    return this.projectsService.deleteProject(tenant.tenantId, projectId);
+    return this.projectsService.deleteProject(tenant.tenantId, userId, projectId);
   }
 }

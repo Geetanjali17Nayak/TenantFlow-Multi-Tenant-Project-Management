@@ -41,8 +41,8 @@ export const AuditLogsPage: React.FC = () => {
       };
       const res = await auditApi.getAuditLogs(params);
       setLogs(res.data);
-      setTotalPages(res.totalPages || 1);
-      setTotal(res.total || 0);
+      setTotalPages(res.meta.totalPages || 1);
+      setTotal(res.meta.total || 0);
     } catch (err: any) {
       console.error('Failed to fetch audit logs:', err);
     } finally {
@@ -70,7 +70,7 @@ export const AuditLogsPage: React.FC = () => {
           <input
             type="text"
             className="input-field"
-            placeholder="Filter by Action (e.g. PROJECT_CREATE)"
+            placeholder="Filter by Action (e.g. PROJECT_CREATED)"
             value={actionFilter}
             onChange={(e) => {
               setActionFilter(e.target.value);

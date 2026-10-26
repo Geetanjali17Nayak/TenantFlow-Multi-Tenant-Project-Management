@@ -16,6 +16,7 @@ import {
   Layers,
   Calendar,
   User,
+  History,
 } from 'lucide-react';
 
 export const ProjectDetailPage: React.FC = () => {
@@ -180,6 +181,12 @@ export const ProjectDetailPage: React.FC = () => {
             <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <Layers size={14} /> Tasks: {tasks.length}
             </span>
+            <Link
+              to={`/activity?entity=Project&entityId=${project.id}`}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--accent-primary)', textDecoration: 'none', fontWeight: 600 }}
+            >
+              <History size={14} /> History
+            </Link>
           </div>
         </div>
 

@@ -19,6 +19,7 @@ export const ROLE_PERMISSIONS_MAP: Record<Role, Permission[]> = {
     Permission.TASK_UPDATE,
     Permission.TASK_DELETE,
     Permission.AUDIT_READ,
+    Permission.ACTIVITY_READ,
   ],
   [Role.ADMIN]: [
     Permission.ORG_READ,
@@ -36,6 +37,7 @@ export const ROLE_PERMISSIONS_MAP: Record<Role, Permission[]> = {
     Permission.TASK_UPDATE,
     Permission.TASK_DELETE,
     Permission.AUDIT_READ,
+    Permission.ACTIVITY_READ,
   ],
   [Role.MANAGER]: [
     Permission.ORG_READ,
@@ -47,6 +49,7 @@ export const ROLE_PERMISSIONS_MAP: Record<Role, Permission[]> = {
     Permission.TASK_READ,
     Permission.TASK_UPDATE,
     Permission.TASK_DELETE,
+    Permission.ACTIVITY_READ,
   ],
   [Role.MEMBER]: [
     Permission.ORG_READ,
@@ -55,11 +58,13 @@ export const ROLE_PERMISSIONS_MAP: Record<Role, Permission[]> = {
     Permission.TASK_CREATE,
     Permission.TASK_READ,
     Permission.TASK_UPDATE,
+    Permission.ACTIVITY_READ,
   ],
   [Role.VIEWER]: [
     Permission.ORG_READ,
     Permission.MEMBER_READ,
     Permission.PROJECT_READ,
     Permission.TASK_READ,
+    Permission.ACTIVITY_READ,
   ],
 };

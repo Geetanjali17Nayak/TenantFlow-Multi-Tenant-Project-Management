@@ -1,0 +1,11 @@
+# Backend environment and build outputs
+backend/.env
+backend/.env.*
+!backend/.env.example
+backend/dist
+backend/node_modules
+backend/coverage
+
+# OS generated files
+.DS_Store
+Thumbs.db

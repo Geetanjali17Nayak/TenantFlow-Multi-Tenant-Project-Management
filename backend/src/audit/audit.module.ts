@@ -1,0 +1,14 @@
+import { Global, Module } from '@nestjs/common';
+import { AuditController } from './audit.controller';
+import { AuditService } from './audit.service';
+import { TenantModule } from '../tenant/tenant.module';
+import { PermissionsModule } from '../permissions/permissions.module';
+
+@Global()
+@Module({
+  imports: [TenantModule, PermissionsModule],
+  controllers: [AuditController],
+  providers: [AuditService],
+  exports: [AuditService],
+})
+export class AuditModule {}
